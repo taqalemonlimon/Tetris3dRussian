@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>3D Тетрис</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a12;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #ui {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    pointer-events: none;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  #ui > * { pointer-events: auto; }
+  h1 {
+    font-size: 1.6rem;
+    letter-spacing: 3px;
+    background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .stats {
+    display: flex;
+    gap: 20px;
+    background: rgba(20,20,40,0.85);
+    padding: 10px 18px;
+    border-radius: 12px;
+    border: 1px solid #2a2a5a;
+    backdrop-filter: blur(8px);
+  }
+  .stat { text-align: center; }
+  .stat label {
+    display: block;
+    font-size: 0.65rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .stat span {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #48dbfb;
+  }
+  #canvas-container {
+    flex: 1;
+    width: 100%;
+    position: relative;
+  }
+  canvas { display: block; width: 100% !important; height: 100% !important; }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(8,8,18,0.88);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+  }
+  #overlay.hidden { display: none; }
+  #overlay h2 {
+    font-size: 2.4rem;
+    margin-bottom: 10px;
+    color: #ff6b6b;
+  }
+  #overlay p { color: #aaa; margin-bottom: 24px; font-size: 1.1rem; }
+  button {
+    background: linear-gradient(135deg, #48dbfb, #0abde3);
+    color: #0a0a12;
+    border: none;
+    padding: 14px 40px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 24px rgba(72,219,251,0.5);
+  }
+  .controls-hint {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75rem;
+    color: #555;
+    text-align: center;
+    z-index: 5;
+    line-height: 1.5;
+  }
+  .controls-hint kbd {
+    background: #1a1a3a;
+    padding: 2px 7px;
+    border-radius: 4px;
+    color: #aaa;
+  }
+  .mobile-btns {
+    display: none;
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    gap: 10px;
+    z-index: 15;
+  }
+  .mobile-btns button {
+    width: 58px;
+    height: 58px;
+    font-size: 1.3rem;
+    padding: 0;
+    border-radius: 14px;
+    background: rgba(30,30,60,0.9);
+    color: #eee;
+    border: 2px solid #3a3a6a;
+  }
+  @media (max-width: 700px) {
+    .mobile-btns { display: flex; }
+    .controls-hint { display: none; }
+    .stats { gap: 12px; padding: 8px 12px; }
+    .stat span { font-size: 1.1rem; }
+    h1 { font-size: 1.2rem; }
+  }
+</style>
+</head>
+<body>
+  <div id="ui">
+    <h1>3D ТЕТРИС</h1>
+    <div class="stats">
+      <div class="stat"><label>Счёт</label><span id="score">0</span></div>
+      <div class="stat"><label>Уровень</label><span id="level">1</span></div>
+      <div class="stat"><label>Линии</label><span id="lines">0</span></div>
+      <div class="stat">
+        <label>Музыка</label>
+        <button id="mute-btn" style="background:none;border:none;color:#48dbfb;font-size:1.3rem;cursor:pointer;padding:0;line-height:1;">🔊</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="canvas-container">
+    <div id="overlay">
+      <h2 id="overlay-title">3D Тетрис</h2>
+      <p id="overlay-msg">Нажми Старт</p>
+      <button id="start-btn">Старт</button>
+    </div>
+  </div>
+
+  <div class="controls-hint">
+    <kbd>←</kbd><kbd>→</kbd> движение &nbsp;
+    <kbd>↑</kbd>/<kbd>X</kbd> поворот &nbsp;
+    <kbd>↓</kbd> ускорение &nbsp;
+    <kbd>Пробел</kbd> дроп &nbsp;
+    <kbd>P</kbd> пауза &nbsp;
+    <kbd>Q</kbd>/<kbd>E</kbd> камера
+  </div>
+
+  <div class="mobile-btns">
+    <button id="m-left">←</button>
+    <button id="m-rot">↻</button>
+    <button id="m-right">→</button>
+    <button id="m-down">↓</button>
+    <button id="m-drop">⬇</button>
+  </div>
+
+<!-- Classic Three.js (UMD, no modules) — better compatibility -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const COLS = 10;
+  const ROWS = 20;
+
+  const COLORS = [
+    null,
+    0x00e5e5, // I
+    0xf0e000, // O
+    0xb000f0, // T
+    0x00e000, // S
+    0xf02020, // Z
+    0x2060f0, // J
+    0xf08000  // L
+  ];
+
+  const SHAPES = [
+    null,
+    [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+    [[2,2],[2,2]],
+    [[0,3,0],[3,3,3],[0,0,0]],
+    [[0,4,4],[4,4,0],[0,0,0]],
+    [[5,5,0],[0,5,5],[0,0,0]],
+    [[6,0,0],[6,6,6],[0,0,0]],
+    [[0,0,7],[7,7,7],[0,0,0]]
+  ];
+
+  // ===== 16-bit style Tetris Theme (Korobeiniki) via Web Audio =====
+  // Richer synthesis: melody (pulse) + bass (triangle) + light harmony
+  const NOTE = {
+    E5: 659.25, B4: 493.88, C5: 523.25, D5: 587.33,
+    A4: 440.00, G4: 392.00, F5: 698.46, A5: 880.00,
+    G5: 783.99, E4: 329.63, C4: 261.63, D4: 293.66,
+    B3: 246.94, A3: 220.00, G3: 196.00, F4: 349.23,
+    G4b: 369.99, REST: 0,
+    // bass register
+    E3: 164.81, B2: 123.47, C3: 130.81, D3: 146.83,
+    A2: 110.00, G2: 98.00, F3: 174.61, A3b: 207.65
+  };
+
+  // [melodyFreq, beats, bassFreq]
+  const MELODY = [
+    // Phrase 1
+    [NOTE.E5, 1,   NOTE.E3], [NOTE.B4, 0.5, NOTE.E3], [NOTE.C5, 0.5, NOTE.E3],
+    [NOTE.D5, 1,   NOTE.B2], [NOTE.C5, 0.5, NOTE.B2], [NOTE.B4, 0.5, NOTE.B2],
+    [NOTE.A4, 1,   NOTE.A2], [NOTE.A4, 0.5, NOTE.A2], [NOTE.C5, 0.5, NOTE.A2],
+    [NOTE.E5, 1,   NOTE.A2], [NOTE.D5, 0.5, NOTE.A2], [NOTE.C5, 0.5, NOTE.A2],
+    [NOTE.B4, 1.5, NOTE.E3], [NOTE.C5, 0.5, NOTE.E3],
+    [NOTE.D5, 1,   NOTE.B2], [NOTE.E5, 1,   NOTE.B2],
+    [NOTE.C5, 1,   NOTE.A2], [NOTE.A4, 1,   NOTE.A2],
+    [NOTE.A4, 1,   NOTE.A2], [NOTE.REST, 1, NOTE.REST],
+
+    // Phrase 2
+    [NOTE.D5, 1,   NOTE.D3], [NOTE.F5, 0.5, NOTE.D3], [NOTE.A5, 1, NOTE.D3],
+    [NOTE.G5, 0.5, NOTE.D3], [NOTE.F5, 0.5, NOTE.D3],
+    [NOTE.E5, 1.5, NOTE.C3], [NOTE.C5, 0.5, NOTE.C3],
+    [NOTE.E5, 1,   NOTE.C3], [NOTE.D5, 0.5, NOTE.C3], [NOTE.C5, 0.5, NOTE.C3],
+    [NOTE.B4, 1,   NOTE.B2], [NOTE.B4, 0.5, NOTE.B2], [NOTE.C5, 0.5, NOTE.B2],
+    [NOTE.D5, 1,   NOTE.E3], [NOTE.E5, 1,   NOTE.E3],
+    [NOTE.C5, 1,   NOTE.A2], [NOTE.A4, 1,   NOTE.A2],
+    [NOTE.A4, 1,   NOTE.A2], [NOTE.REST, 1, NOTE.REST],
+
+    // Phrase 1 again
+    [NOTE.E5, 1,   NOTE.E3], [NOTE.B4, 0.5, NOTE.E3], [NOTE.C5, 0.5, NOTE.E3],
+    [NOTE.D5, 1,   NOTE.B2], [NOTE.C5, 0.5, NOTE.B2], [NOTE.B4, 0.5, NOTE.B2],
+    [NOTE.A4, 1,   NOTE.A2], [NOTE.A4, 0.5, NOTE.A2], [NOTE.C5, 0.5, NOTE.A2],
+    [NOTE.E5, 1,   NOTE.A2], [NOTE.D5, 0.5, NOTE.A2], [NOTE.C5, 0.5, NOTE.A2],
+    [NOTE.B4, 1.5, NOTE.E3], [NOTE.C5, 0.5, NOTE.E3],
+    [NOTE.D5, 1,   NOTE.B2], [NOTE.E5, 1,   NOTE.B2],
+    [NOTE.C5, 1,   NOTE.A2], [NOTE.A4, 1,   NOTE.A2],
+    [NOTE.A4, 1,   NOTE.A2], [NOTE.REST, 1, NOTE.REST]
+  ];
+
+  let audioCtx = null;
+  let musicGain = null;
+  let musicPlaying = false;
+  let musicMuted = false;
+  let nextNoteTime = 0;
+  let noteIndex = 0;
+  let musicTimer = null;
+  const BPM = 150;
+  const BEAT = 60 / BPM;
+
+  function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = 0.22;
+    musicGain.connect(audioCtx.destination);
+  }
+
+  // 16-bit style: dual oscillators for melody (pulse thickness) + triangle bass
+  function playTone(freq, start, duration, type, volume, detune) {
+    if (!audioCtx || musicMuted || !freq) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type || 'square';
+    osc.frequency.value = freq;
+    if (detune) osc.detune.value = detune;
+    const vol = volume || 0.25;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(vol, start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(vol * 0.7, start + duration * 0.35);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration * 0.92);
+    osc.connect(gain);
+    gain.connect(musicGain);
+    osc.start(start);
+    osc.stop(start + duration + 0.02);
+  }
+
+  function playNote(melFreq, start, duration, bassFreq) {
+    if (!audioCtx || musicMuted) return;
+    // Melody: two slightly detuned squares = thicker 16-bit lead
+    if (melFreq) {
+      playTone(melFreq, start, duration, 'square', 0.22, 0);
+      playTone(melFreq, start, duration, 'square', 0.12, 7);   // slight detune
+    }
+    // Bass: triangle wave (classic 16-bit / Genesis-ish)
+    if (bassFreq) {
+      playTone(bassFreq, start, duration, 'triangle', 0.28, 0);
+      // soft sub
+      playTone(bassFreq * 0.5, start, duration, 'sine', 0.08, 0);
+    }
+  }
+
+  function scheduleNotes() {
+    if (!musicPlaying || !audioCtx) return;
+    const now = audioCtx.currentTime;
+    while (nextNoteTime < now + 0.18) {
+      const entry = MELODY[noteIndex];
+      const mel = entry[0];
+      const beats = entry[1];
+      const bass = entry[2] || 0;
+      const dur = beats * BEAT;
+      playNote(mel, nextNoteTime, dur, bass);
+      nextNoteTime += dur;
+      noteIndex = (noteIndex + 1) % MELODY.length;
+    }
+    musicTimer = setTimeout(scheduleNotes, 35);
+  }
+
+  function startMusic() {
+    initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (musicPlaying) return;
+    musicPlaying = true;
+    noteIndex = 0;
+    nextNoteTime = audioCtx.currentTime + 0.05;
+    scheduleNotes();
+  }
+
+  function stopMusic() {
+    musicPlaying = false;
+    if (musicTimer) {
+      clearTimeout(musicTimer);
+      musicTimer = null;
+    }
+  }
+
+  function toggleMute() {
+    musicMuted = !musicMuted;
+    const btn = document.getElementById('mute-btn');
+    if (btn) btn.textContent = musicMuted ? '🔇' : '🔊';
+    if (musicGain) {
+      musicGain.gain.value = musicMuted ? 0 : 0.22;
+    }
+  }
+
+  // ===== Three.js =====
+  const container = document.getElementById('canvas-container');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0a12);
+  scene.fog = new THREE.Fog(0x0a0a12, 28, 50);
+
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+  let camAngle = 0.4;
+  const camRadius = 24;
+  const camHeight = 16;
+  function updateCamera() {
+    camera.position.x = Math.sin(camAngle) * camRadius;
+    camera.position.z = Math.cos(camAngle) * camRadius;
+    camera.position.y = camHeight;
+    camera.lookAt(0, ROWS / 2 - 1, 0);
+  }
+  updateCamera();
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+
+  // Lights
+  scene.add(new THREE.AmbientLight(0x505070, 0.7));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.1);
+  dir.position.set(10, 22, 14);
+  dir.castShadow = true;
+  dir.shadow.mapSize.set(1024, 1024);
+  dir.shadow.camera.near = 2;
+  dir.shadow.camera.far = 60;
+  dir.shadow.camera.left = -14;
+  dir.shadow.camera.right = 14;
+  dir.shadow.camera.top = 14;
+  dir.shadow.camera.bottom = -14;
+  scene.add(dir);
+  const pl = new THREE.PointLight(0x48dbfb, 0.35, 35);
+  pl.position.set(0, 14, 6);
+  scene.add(pl);
+
+  // Well
+  const wellGroup = new THREE.Group();
+  scene.add(wellGroup);
+
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: 0x12122a, transparent: true, opacity: 0.45, roughness: 0.9
+  });
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x151525, roughness: 0.85 });
+
+  // Floor
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(COLS + 0.5, 0.25, 1.6), floorMat);
+  floor.position.set(0, -0.12, 0);
+  floor.receiveShadow = true;
+  wellGroup.add(floor);
+
+  // Back wall
+  const back = new THREE.Mesh(new THREE.BoxGeometry(COLS + 0.5, ROWS + 0.5, 0.12), wallMat);
+  back.position.set(0, ROWS / 2, -0.75);
+  wellGroup.add(back);
+
+  // Sides
+  const sideGeo = new THREE.BoxGeometry(0.12, ROWS + 0.5, 1.6);
+  const leftW = new THREE.Mesh(sideGeo, wallMat);
+  leftW.position.set(-COLS / 2 - 0.25, ROWS / 2, 0);
+  wellGroup.add(leftW);
+  const rightW = new THREE.Mesh(sideGeo, wallMat);
+  rightW.position.set(COLS / 2 + 0.25, ROWS / 2, 0);
+  wellGroup.add(rightW);
+
+  // Grid lines
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x2a2a4a });
+  for (let i = 0; i <= ROWS; i++) {
+    const g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-COLS / 2, i, -0.68),
+      new THREE.Vector3(COLS / 2, i, -0.68)
+    ]);
+    wellGroup.add(new THREE.Line(g, lineMat));
+  }
+  for (let i = 0; i <= COLS; i++) {
+    const g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-COLS / 2 + i, 0, -0.68),
+      new THREE.Vector3(-COLS / 2 + i, ROWS, -0.68)
+    ]);
+    wellGroup.add(new THREE.Line(g, lineMat));
+  }
+
+  // Block geometry & materials
+  const blockGeo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+  const materials = {};
+  COLORS.forEach(function (c, i) {
+    if (c) {
+      materials[i] = new THREE.MeshStandardMaterial({
+        color: c,
+        roughness: 0.35,
+        metalness: 0.2,
+        emissive: c,
+        emissiveIntensity: 0.1
+      });
+    }
+  });
+  const ghostMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff, transparent: true, opacity: 0.13, depthWrite: false
+  });
+
+  const boardOffsetX = -COLS / 2 + 0.5;
+  const boardOffsetY = 0.5;
+
+  function cellPos(x, y) {
+    return { x: boardOffsetX + x, y: boardOffsetY + y, z: 0 };
+  }
+
+  // Game state
+  let board = [];
+  let boardMeshes = [];
+  let piece = null;
+  let nextType = 1;
+  let score = 0, level = 1, lines = 0;
+  let dropInterval = 1000;
+  let dropCounter = 0;
+  let lastTime = 0;
+  let gameOver = false;
+  let paused = false;
+  let animId = null;
+
+  const pieceGroup = new THREE.Group();
+  scene.add(pieceGroup);
+  const ghostGroup = new THREE.Group();
+  scene.add(ghostGroup);
+
+  function createBoard() {
+    for (let y = 0; y < boardMeshes.length; y++) {
+      for (let x = 0; x < (boardMeshes[y] || []).length; x++) {
+        if (boardMeshes[y][x]) scene.remove(boardMeshes[y][x]);
+      }
+    }
+    board = [];
+    boardMeshes = [];
+    for (let y = 0; y < ROWS; y++) {
+      board[y] = [];
+      boardMeshes[y] = [];
+      for (let x = 0; x < COLS; x++) {
+        board[y][x] = 0;
+        boardMeshes[y][x] = null;
+      }
+    }
+  }
+
+  function addStaticBlock(x, y, type) {
+    const mesh = new THREE.Mesh(blockGeo, materials[type]);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const p = cellPos(x, y);
+    mesh.position.set(p.x, p.y, p.z);
+    scene.add(mesh);
+    return mesh;
+  }
+
+  function syncBoard() {
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const val = board[y][x];
+        const existing = boardMeshes[y][x];
+        if (val && !existing) {
+          boardMeshes[y][x] = addStaticBlock(x, y, val);
+        } else if (!val && existing) {
+          scene.remove(existing);
+          boardMeshes[y][x] = null;
+        }
+      }
+    }
+  }
+
+  function clearPieceMeshes() {
+    while (pieceGroup.children.length) pieceGroup.remove(pieceGroup.children[0]);
+    while (ghostGroup.children.length) ghostGroup.remove(ghostGroup.children[0]);
+  }
+
+  function drawPiece() {
+    clearPieceMeshes();
+    if (!piece) return;
+    const m = piece.matrix;
+    for (let dy = 0; dy < m.length; dy++) {
+      for (let dx = 0; dx < m[dy].length; dx++) {
+        if (m[dy][dx]) {
+          const mesh = new THREE.Mesh(blockGeo, materials[m[dy][dx]]);
+          mesh.castShadow = true;
+          const p = cellPos(piece.x + dx, piece.y + dy);
+          mesh.position.set(p.x, p.y, p.z);
+          pieceGroup.add(mesh);
+        }
+      }
+    }
+    // ghost
+    let gy = piece.y;
+    while (!collide({ x: piece.x, y: gy - 1, matrix: piece.matrix })) gy--;
+    for (let dy = 0; dy < m.length; dy++) {
+      for (let dx = 0; dx < m[dy].length; dx++) {
+        if (m[dy][dx]) {
+          const mesh = new THREE.Mesh(blockGeo, ghostMat);
+          const p = cellPos(piece.x + dx, gy + dy);
+          mesh.position.set(p.x, p.y, p.z);
+          ghostGroup.add(mesh);
+        }
+      }
+    }
+  }
+
+  function collide(p) {
+    const m = p.matrix;
+    for (let dy = 0; dy < m.length; dy++) {
+      for (let dx = 0; dx < m[dy].length; dx++) {
+        if (m[dy][dx]) {
+          const bx = p.x + dx;
+          const by = p.y + dy;
+          if (bx < 0 || bx >= COLS || by < 0) return true;
+          if (by < ROWS && board[by][bx]) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function merge() {
+    const m = piece.matrix;
+    for (let dy = 0; dy < m.length; dy++) {
+      for (let dx = 0; dx < m[dy].length; dx++) {
+        if (m[dy][dx]) {
+          const bx = piece.x + dx;
+          const by = piece.y + dy;
+          if (by >= 0 && by < ROWS && bx >= 0 && bx < COLS) {
+            board[by][bx] = m[dy][dx];
+          }
+        }
+      }
+    }
+    syncBoard();
+  }
+
+  function clearLines() {
+    let cleared = 0;
+    for (let y = 0; y < ROWS; ) {
+      let full = true;
+      for (let x = 0; x < COLS; x++) {
+        if (!board[y][x]) { full = false; break; }
+      }
+      if (full) {
+        for (let x = 0; x < COLS; x++) {
+          if (boardMeshes[y][x]) scene.remove(boardMeshes[y][x]);
+        }
+        board.splice(y, 1);
+        board.push(new Array(COLS).fill(0));
+        boardMeshes.splice(y, 1);
+        boardMeshes.push(new Array(COLS).fill(null));
+        for (let yy = y; yy < ROWS; yy++) {
+          for (let x = 0; x < COLS; x++) {
+            const mesh = boardMeshes[yy][x];
+            if (mesh) {
+              const p = cellPos(x, yy);
+              mesh.position.set(p.x, p.y, p.z);
+            }
+          }
+        }
+        cleared++;
+      } else {
+        y++;
+      }
+    }
+    if (cleared > 0) {
+      const pts = [0, 100, 300, 500, 800];
+      score += pts[cleared] * level;
+      lines += cleared;
+      level = Math.floor(lines / 10) + 1;
+      dropInterval = Math.max(70, 1000 - (level - 1) * 70);
+      updateUI();
+    }
+  }
+
+  function rotateMatrix(mat) {
+    const N = mat.length;
+    const res = [];
+    for (let y = 0; y < N; y++) {
+      res[y] = [];
+      for (let x = 0; x < N; x++) res[y][x] = 0;
+    }
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++)
+        res[x][N - 1 - y] = mat[y][x];
+    return res;
+  }
+
+  function playerRotate() {
+    const old = piece.matrix;
+    piece.matrix = rotateMatrix(piece.matrix);
+    if (collide(piece)) {
+      const kicks = [1, -1, 2, -2];
+      let ok = false;
+      for (let i = 0; i < kicks.length; i++) {
+        piece.x += kicks[i];
+        if (!collide(piece)) { ok = true; break; }
+        piece.x -= kicks[i];
+      }
+      if (!ok) piece.matrix = old;
+    }
+  }
+
+  function drop() {
+    piece.y--;
+    if (collide(piece)) {
+      piece.y++;
+      merge();
+      clearLines();
+      spawnPiece();
+      if (collide(piece)) {
+        endGame();
+        return;
+      }
+    }
+    dropCounter = 0;
+    drawPiece();
+  }
+
+  function hardDrop() {
+    while (!collide({ x: piece.x, y: piece.y - 1, matrix: piece.matrix })) {
+      piece.y--;
+      score += 2;
+    }
+    drop();
+    updateUI();
+  }
+
+  function move(dir) {
+    piece.x += dir;
+    if (collide(piece)) piece.x -= dir;
+    else drawPiece();
+  }
+
+  function randomType() {
+    return 1 + Math.floor(Math.random() * 7);
+  }
+
+  function spawnPiece() {
+    const type = nextType;
+    nextType = randomType();
+    const matrix = SHAPES[type].map(function (r) { return r.slice(); });
+    piece = {
+      matrix: matrix,
+      type: type,
+      x: Math.floor((COLS - matrix[0].length) / 2),
+      y: ROWS - matrix.length
+    };
+    drawPiece();
+  }
+
+  function updateUI() {
+    document.getElementById('score').textContent = score;
+    document.getElementById('level').textContent = level;
+    document.getElementById('lines').textContent = lines;
+  }
+
+  function showOverlay(title, msg, btnText) {
+    document.getElementById('overlay-title').textContent = title;
+    document.getElementById('overlay-msg').textContent = msg;
+    document.getElementById('start-btn').textContent = btnText;
+    document.getElementById('overlay').classList.remove('hidden');
+  }
+
+  function hideOverlay() {
+    document.getElementById('overlay').classList.add('hidden');
+  }
+
+  function startGame() {
+    createBoard();
+    nextType = randomType();
+    spawnPiece();
+    score = 0;
+    level = 1;
+    lines = 0;
+    dropInterval = 1000;
+    dropCounter = 0;
+    lastTime = performance.now();
+    gameOver = false;
+    paused = false;
+    updateUI();
+    hideOverlay();
+    if (animId) cancelAnimationFrame(animId);
+    startMusic();
+    loop(lastTime);
+  }
+
+  function endGame() {
+    gameOver = true;
+    stopMusic();
+    showOverlay('Игра окончена', 'Счёт: ' + score, 'Заново');
+    if (animId) cancelAnimationFrame(animId);
+  }
+
+  function togglePause() {
+    if (gameOver) return;
+    paused = !paused;
+    if (paused) {
+      stopMusic();
+      showOverlay('Пауза', 'Нажми P или кнопку', 'Продолжить');
+      if (animId) cancelAnimationFrame(animId);
+    } else {
+      hideOverlay();
+      lastTime = performance.now();
+      startMusic();
+      loop(lastTime);
+    }
+  }
+
+  function loop(time) {
+    if (gameOver || paused) return;
+    const delta = time - lastTime;
+    lastTime = time;
+    dropCounter += delta;
+    if (dropCounter >= dropInterval) drop();
+    renderer.render(scene, camera);
+    animId = requestAnimationFrame(loop);
+  }
+
+  // Resize
+  function onResize() {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+  window.addEventListener('resize', onResize);
+  onResize();
+
+  // Input
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'p' || e.key === 'P' || e.key === 'з' || e.key === 'З') {
+      togglePause();
+      return;
+    }
+    if (e.key === 'q' || e.key === 'Q' || e.key === 'й' || e.key === 'Й') {
+      camAngle -= 0.18;
+      updateCamera();
+      return;
+    }
+    if (e.key === 'e' || e.key === 'E' || e.key === 'у' || e.key === 'У') {
+      camAngle += 0.18;
+      updateCamera();
+      return;
+    }
+    if (paused || gameOver) return;
+    switch (e.key) {
+      case 'ArrowLeft': case 'a': case 'A': case 'ф': case 'Ф':
+        move(-1); break;
+      case 'ArrowRight': case 'd': case 'D': case 'в': case 'В':
+        move(1); break;
+      case 'ArrowDown': case 's': case 'S': case 'ы': case 'Ы':
+        drop(); score += 1; updateUI(); break;
+      case 'ArrowUp': case 'x': case 'X': case 'w': case 'W':
+      case 'ч': case 'Ч': case 'ц': case 'Ц':
+        playerRotate(); drawPiece(); break;
+      case ' ':
+        e.preventDefault();
+        hardDrop(); break;
+    }
+  });
+
+  document.getElementById('start-btn').addEventListener('click', function () {
+    if (paused) togglePause();
+    else startGame();
+  });
+
+  document.getElementById('mute-btn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    toggleMute();
+  });
+
+  document.getElementById('m-left').addEventListener('click', function () {
+    if (!paused && !gameOver) move(-1);
+  });
+  document.getElementById('m-right').addEventListener('click', function () {
+    if (!paused && !gameOver) move(1);
+  });
+  document.getElementById('m-rot').addEventListener('click', function () {
+    if (!paused && !gameOver) { playerRotate(); drawPiece(); }
+  });
+  document.getElementById('m-down').addEventListener('click', function () {
+    if (!paused && !gameOver) { drop(); score += 1; updateUI(); }
+  });
+  document.getElementById('m-drop').addEventListener('click', function () {
+    if (!paused && !gameOver) hardDrop();
+  });
+
+  // First render
+  createBoard();
+  renderer.render(scene, camera);
+})();
+</script>
+</body>
+</html>
